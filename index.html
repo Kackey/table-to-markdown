@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>表 → Markdown 変換</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F3F5F2;
+    --sheet: #FFFFFF;
+    --ink: #22302A;
+    --muted: #66756D;
+    --rule: #CBD5CE;
+    --accent: #2F7D5B;
+    --accent-ink: #FFFFFF;
+    --accent-soft: #DCEDE4;
+    --font-ui: "IBM Plex Sans JP", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+    --font-code: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, "BIZ UDGothic", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #161C19;
+      --sheet: #1E2622;
+      --ink: #E4EBE6;
+      --muted: #93A39A;
+      --rule: #34413A;
+      --accent: #5DBB8D;
+      --accent-ink: #0F1512;
+      --accent-soft: #24382E;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 20px 48px; }
+
+  header { margin-bottom: 24px; }
+  h1 {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    margin: 0 0 4px;
+  }
+  header p { margin: 0; color: var(--muted); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--sheet);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--rule);
+    min-height: 52px;
+  }
+  .panel-head h2 { font-size: 15px; font-weight: 500; margin: 0; }
+
+  textarea, pre {
+    font-family: var(--font-code);
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin: 0;
+    padding: 14px;
+    height: 280px;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+  }
+  textarea { width: 100%; resize: vertical; tab-size: 4; }
+  textarea::placeholder { color: var(--muted); font-family: var(--font-ui); }
+  textarea:focus { outline: none; }
+  .panel:focus-within { border-color: var(--accent); }
+  pre { overflow: auto; white-space: pre; }
+  pre.empty { color: var(--muted); font-family: var(--font-ui); white-space: normal; }
+
+  button {
+    font: inherit;
+    font-size: 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 6px 14px;
+    border: 1px solid var(--rule);
+    background: var(--sheet);
+    color: var(--ink);
+  }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 500;
+    min-width: 7.5em;
+  }
+  button.primary:disabled { opacity: 0.45; cursor: default; }
+  button.primary.done { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+
+  .options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    margin: 18px 2px;
+  }
+  .options label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+  .options input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+
+  .preview { margin-top: 4px; }
+  .preview .panel-head span { color: var(--muted); font-size: 13px; }
+  .table-scroll { overflow-x: auto; padding: 14px; }
+  .empty-note { color: var(--muted); margin: 0; padding: 14px; }
+
+  table.cells { border-collapse: collapse; font-size: 14px; }
+  table.cells th, table.cells td {
+    border: 1px solid var(--rule);
+    padding: 6px 10px;
+    white-space: pre-wrap;
+    vertical-align: top;
+    min-width: 4em;
+  }
+  table.cells thead.is-header tr.data th { background: var(--accent-soft); font-weight: 700; }
+  table.cells tr.align th { padding: 4px; border-color: transparent; background: transparent; }
+  .align-btn {
+    width: 100%;
+    font-size: 12.5px;
+    padding: 3px 8px;
+    color: var(--muted);
+  }
+  .align-btn.set { color: var(--accent); border-color: var(--accent); }
+
+  .hint { color: var(--muted); font-size: 13px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>表 → Markdown 変換</h1>
+    <p>Notion・Numbers・Googleスプレッドシート・Excel でコピーした表を貼り付けると、Markdown の表に変換します。</p>
+  </header>
+
+  <div class="grid">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>貼り付け</h2>
+        <button type="button" id="clear">クリア</button>
+      </div>
+      <textarea id="input" spellcheck="false" placeholder="ここにコピーした表を貼り付け（Ctrl+V / ⌘V）"></textarea>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Markdown</h2>
+        <button type="button" class="primary" id="copy" disabled>コピー</button>
+      </div>
+      <pre id="output" class="empty">変換結果がここに表示されます。</pre>
+    </section>
+  </div>
+
+  <div class="options">
+    <label><input type="checkbox" id="opt-header" checked> 1行目を見出しにする</label>
+    <label><input type="checkbox" id="opt-pad" checked> 列幅を揃える</label>
+    <label><input type="checkbox" id="opt-autocopy"> 貼り付けたら自動でコピー</label>
+  </div>
+
+  <section class="panel preview">
+    <div class="panel-head">
+      <h2>読み取った表</h2>
+      <span id="size"></span>
+    </div>
+    <div id="preview"><p class="empty-note">貼り付けると、ここで表の内容と列ごとの配置を確認できます。</p></div>
+  </section>
+
+  <p class="hint">列の上のボタンを押すと、その列の配置（既定・左・中央・右）を切り替えられます。</p>
+</div>
+
+<script>
+/* ---------- 解析 ---------- */
+
+// タブ区切りテキスト（Excel形式の "..." 引用付き）を2次元配列に
+function parseTSV(text) {
+  text = text.replace(/\r\n?/g, "\n");
+  const rows = [];
+  let row = [], cell = "", inQuote = false, cellStart = true;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuote) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { cell += '"'; i++; }
+        else inQuote = false;
+      } else cell += c;
+      continue;
+    }
+    if (c === '"' && cellStart) { inQuote = true; cellStart = false; }
+    else if (c === "\t") { row.push(cell); cell = ""; cellStart = true; }
+    else if (c === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; cellStart = true; }
+    else { cell += c; cellStart = false; }
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
+// クリップボードの HTML から最初の <table> を2次元配列に
+function parseHTMLTable(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const table = doc.querySelector("table");
+  if (!table) return null;
+  const rows = [];
+  for (const tr of table.querySelectorAll("tr")) {
+    const row = [];
+    for (const cell of tr.children) {
+      if (!/^(TD|TH)$/.test(cell.tagName)) continue;
+      row.push(cellText(cell));
+      const span = parseInt(cell.getAttribute("colspan") || "1", 10);
+      for (let k = 1; k < span; k++) row.push("");
+    }
+    rows.push(row);
+  }
+  return rows.length ? rows : null;
+}
+
+function cellText(el) {
+  const clone = el.cloneNode(true);
+  clone.querySelectorAll("style, script").forEach(n => n.remove());
+  clone.querySelectorAll("br").forEach(n => n.replaceWith("\n"));
+  clone.querySelectorAll("p, div, li").forEach(n => n.append("\n"));
+  return clone.textContent.replace(/\u00a0/g, " ").replace(/\n+$/, "").replace(/\n{2,}/g, "\n").trim();
+}
+
+// 列数をそろえ、末尾の空行・空列を取り除く
+function normalize(rows) {
+  rows = rows.map(r => r.map(c => c.trim()));
+  while (rows.length && rows[rows.length - 1].every(c => c === "")) rows.pop();
+  let cols = Math.max(0, ...rows.map(r => r.length));
+  rows = rows.map(r => r.concat(Array(cols - r.length).fill("")));
+  while (cols > 0 && rows.every(r => r[cols - 1] === "")) {
+    cols--;
+    rows = rows.map(r => r.slice(0, cols));
+  }
+  return cols ? rows : [];
+}
+
+// 全角を2、半角を1として表示幅を数える
+function displayWidth(s) {
+  let w = 0;
+  for (const ch of s) {
+    const cp = ch.codePointAt(0);
+    const wide =
+      (cp >= 0x1100 && cp <= 0x115F) || (cp >= 0x2E80 && cp <= 0xA4CF) ||
+      (cp >= 0xAC00 && cp <= 0xD7A3) || (cp >= 0xF900 && cp <= 0xFAFF) ||
+      (cp >= 0xFE30 && cp <= 0xFE4F) || (cp >= 0xFF00 && cp <= 0xFF60) ||
+      (cp >= 0xFFE0 && cp <= 0xFFE6) || (cp >= 0x1F300 && cp <= 0x1FAFF) ||
+      (cp >= 0x20000 && cp <= 0x3FFFD);
+    w += wide ? 2 : 1;
+  }
+  return w;
+}
+
+/* ---------- Markdown 生成 ---------- */
+
+function escapeCell(s) {
+  return s.replace(/\|/g, "\\|").replace(/\n/g, "<br>");
+}
+
+function toMarkdown(rows, { header, pad, aligns }) {
+  if (!rows.length) return "";
+  const cols = rows[0].length;
+  let body = rows.map(r => r.map(escapeCell));
+  let head = header ? body[0] : Array(cols).fill("");
+  if (header) body = body.slice(1);
+
+  const widths = Array.from({ length: cols }, (_, j) =>
+    pad ? Math.max(3, displayWidth(head[j]), ...body.map(r => displayWidth(r[j]))) : 3
+  );
+
+  const fit = (s, j) => {
+    if (!pad) return s;
+    const gap = widths[j] - displayWidth(s);
+    const a = aligns[j];
+    if (a === "right") return " ".repeat(gap) + s;
+    if (a === "center") {
+      const l = Math.floor(gap / 2);
+      return " ".repeat(l) + s + " ".repeat(gap - l);
+    }
+    return s + " ".repeat(gap);
+  };
+  const line = cells => "| " + cells.map(fit).join(" | ") + " |";
+
+  const sep = "| " + widths.map((w, j) => {
+    const a = aligns[j];
+    const n = pad ? w : 3;
+    if (a === "left") return ":" + "-".repeat(n - 1);
+    if (a === "right") return "-".repeat(n - 1) + ":";
+    if (a === "center") return ":" + "-".repeat(n - 2) + ":";
+    return "-".repeat(n);
+  }).join(" | ") + " |";
+
+  return [line(head), sep, ...body.map(line)].join("\n");
+}
+
+/* ---------- 画面 ---------- */
+
+const $ = id => document.getElementById(id);
+const input = $("input"), output = $("output"), copyBtn = $("copy");
+const optHeader = $("opt-header"), optPad = $("opt-pad"), optAuto = $("opt-autocopy");
+
+const ALIGN_ORDER = ["none", "left", "center", "right"];
+const ALIGN_LABEL = { none: "既定", left: "左", center: "中央", right: "右" };
+let rows = [];
+let aligns = [];
+
+function toTSV(data) {
+  return data.map(r => r.map(c => /[\t\n"]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c).join("\t")).join("\n");
+}
+
+function update() {
+  rows = normalize(parseTSV(input.value));
+  const cols = rows.length ? rows[0].length : 0;
+  aligns = Array.from({ length: cols }, (_, j) => aligns[j] || "none");
+  const md = toMarkdown(rows, { header: optHeader.checked, pad: optPad.checked, aligns });
+
+  if (md) {
+    output.textContent = md;
+    output.classList.remove("empty");
+  } else {
+    output.textContent = "変換結果がここに表示されます。";
+    output.classList.add("empty");
+  }
+  copyBtn.disabled = !md;
+  resetCopyLabel();
+  renderPreview();
+  return md;
+}
+
+function renderPreview() {
+  const box = $("preview");
+  $("size").textContent = rows.length ? `${rows.length}行 × ${rows[0].length}列` : "";
+  if (!rows.length) {
+    box.innerHTML = '<p class="empty-note">貼り付けると、ここで表の内容と列ごとの配置を確認できます。</p>';
+    return;
+  }
+  const table = document.createElement("table");
+  table.className = "cells";
+  const thead = document.createElement("thead");
+  if (optHeader.checked) thead.className = "is-header";
+
+  const alignRow = document.createElement("tr");
+  alignRow.className = "align";
+  aligns.forEach((a, j) => {
+    const th = document.createElement("th");
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "align-btn" + (a !== "none" ? " set" : "");
+    b.textContent = ALIGN_LABEL[a];
+    b.setAttribute("aria-label", `${j + 1}列目の配置: ${ALIGN_LABEL[a]}（押して切り替え）`);
+    b.addEventListener("click", () => {
+      aligns[j] = ALIGN_ORDER[(ALIGN_ORDER.indexOf(aligns[j]) + 1) % ALIGN_ORDER.length];
+      update();
+      document.querySelectorAll(".align-btn")[j]?.focus();
+    });
+    th.appendChild(b);
+    alignRow.appendChild(th);
+  });
+  thead.appendChild(alignRow);
+
+  const tbody = document.createElement("tbody");
+  rows.forEach((r, i) => {
+    const tr = document.createElement("tr");
+    const isHead = optHeader.checked && i === 0;
+    if (isHead) tr.className = "data";
+    r.forEach((c, j) => {
+      const cell = document.createElement(isHead ? "th" : "td");
+      cell.textContent = c;
+      const a = aligns[j];
+      cell.style.textAlign = a === "none" ? "left" : a;
+      tr.appendChild(cell);
+    });
+    (isHead ? thead : tbody).appendChild(tr);
+  });
+
+  table.append(thead, tbody);
+  box.innerHTML = "";
+  const scroll = document.createElement("div");
+  scroll.className = "table-scroll";
+  scroll.appendChild(table);
+  box.appendChild(scroll);
+}
+
+let copyTimer;
+function resetCopyLabel() {
+  clearTimeout(copyTimer);
+  copyBtn.textContent = "コピー";
+  copyBtn.classList.remove("done");
+}
+
+async function copyMarkdown() {
+  const md = output.classList.contains("empty") ? "" : output.textContent;
+  if (!md) return;
+  try {
+    await navigator.clipboard.writeText(md);
+  } catch {
+    const t = document.createElement("textarea");
+    t.value = md;
+    document.body.appendChild(t);
+    t.select();
+    document.execCommand("copy");
+    t.remove();
+  }
+  copyBtn.textContent = "コピーしました";
+  copyBtn.classList.add("done");
+  clearTimeout(copyTimer);
+  copyTimer = setTimeout(resetCopyLabel, 1800);
+}
+
+// 貼り付け時：HTML の表があればそちらを優先（Notion などで有効）
+input.addEventListener("paste", e => {
+  const html = e.clipboardData?.getData("text/html");
+  const parsed = html ? parseHTMLTable(html) : null;
+  if (parsed) {
+    e.preventDefault();
+    input.value = toTSV(normalize(parsed));
+  }
+  aligns = [];
+  setTimeout(() => {
+    update();
+    if (optAuto.checked) copyMarkdown();
+  }, 0);
+});
+
+input.addEventListener("input", update);
+[optHeader, optPad].forEach(el => el.addEventListener("change", update));
+copyBtn.addEventListener("click", copyMarkdown);
+$("clear").addEventListener("click", () => {
+  input.value = "";
+  aligns = [];
+  update();
+  input.focus();
+});
+
+update();
+</script>
+</body>
+</html>
